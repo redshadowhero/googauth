@@ -1,3 +1,8 @@
+/*
+* Please note that this file was modified (library paths changed and
+* functions subtracted) from the google-authenticator.c file that is
+* used in Google's pam module. The original copyright is below.
+*/
 // Generates pin codes
 //
 // Copyright 2010 Google Inc.
