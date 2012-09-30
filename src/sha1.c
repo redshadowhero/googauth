@@ -42,6 +42,10 @@
 */
 #define _BSD_SOURCE
 #include <sys/types.h> // Defines BYTE_ORDER, if _BSD_SOURCE is defined
+// if windows, however, we'll have to use mingw's sys/param.h
+#if defined ( _WIN32 ) || defined ( _WIN64 )
+#include <sys/param.h>
+#endif
 #include <string.h>
 
 #include <google/sha1.h>
