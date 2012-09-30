@@ -1,115 +1,90 @@
-#include <rsh/base32string.h>
-#include <rsh/google_authenticator.h>
-#include <stdlib.h>
+#include <google/google-authenticator.h>
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
-#include <rsh/debug.h>
 
-#include <hmac.h>
-#include <sha1.h>
+#define   PINLENGTH        6    // The number of digits a pin is supposed to be
+#define   INTERVALLENGTH   30   // The number of seconds in any one given interval
+#define   HEADER ":----------------------------:--------:\n" \
+                 ":       Code Wait Time       :  Code  :\n" \
+                 ":----------------------------:--------:\n"
 
-/*****************************************************************************\
-* Globals
-\*****************************************************************************/
-
-char* secret;
-size_t secretlen;
-
-ga_byte* hmacsha1_sign( ga_byte* keybyte, size_t keysize, ga_byte* inbyte, size_t insize )
+char* padOutput( int pin )
 {
-	ga_byte* response = malloc( sizeof(ga_byte)*20 );
-	if( !hmac_sha1( (void*)keybyte, keysize, (void*)inbyte, insize, (void*)response ) )
-		return response;
+	char   pinstr[12]; 
+	char*  rv      = malloc( sizeof(char)*7 ); rv[6] = 0;
+	size_t pinlen  = sprintf( pinstr, "%d", pin );
 
-	return NULL;
+	// We need to make sure the length isn't greater than the accepted pin
+	// length. The behavior is undefined for situations in which the generated
+	// pin is greater in length than 6, so I just return the number.
+	if( pinlen == PINLENGTH || pinlen > PINLENGTH ) return strcpy( rv, pinstr );
+
+	// Pad the return string with the appropriate number of zeros
+	for( int i = 0; i < PINLENGTH-pinlen; i++ ) rv[i] = '0';
+	rv[PINLENGTH-pinlen] = 0;
+
+	// Concatenate the two strings and return.
+	strcat( rv, pinstr );
+	return rv;
 }
 
-char* computepin( char* _secret, size_t _s_len )
+unsigned long getCurrentInterval()
 {
-	char* response = malloc( sizeof(char)*2048 );
-	ga_byte* keyBytes;
-	size_t keyBytesSize = _s_len;
-	ga_passcodeGenerator pg;
-
-	if( secret == NULL || _s_len == 0 ) return strcpy( response, "(\\/) (°,,°) (\\/) Your secret is bad and you should feel bad!" ); 
-
-	keyBytes = ga_decode( _secret, &keyBytesSize );
-
-	ga_setKey( &pg, keyBytes, keyBytesSize );
-	pg.codelength = GA_PASSCODE_LENGTH;
-	pg.intervalperiod = GA_INTERVAL;
-	pg.signer = hmacsha1_sign;
-
-	return ga_generateTimeoutCode( &pg );
+	return (unsigned long)(time(NULL)/INTERVALLENGTH);
 }
 
-void run()
+int main( int argc, const char* argv[] )
 {
-	static char* previouscode = NULL; 
-	static int count = 1; 
-	if( previouscode == NULL )
-	{
-		previouscode = malloc(sizeof(char)*1024);
-		previouscode[0] = '\0';
-	}
+	// TODO: cli options
+	FILE* fd = fopen( argv[1], "r" );
+	char* key = malloc( sizeof(char)*18 );
+	time_t nsec = time(NULL)+1;     // next second
+	unsigned long nextInterval = getCurrentInterval(); // next interval to update at
+	int count = 0; // count for the interface
+	int pin = 0;
+	char* pinstr = NULL; // current pin to print out
 
-	char* newout = computepin( secret, secretlen );
-
-	if( !strcmp( newout, previouscode ) )
-	{
-		printf( "." );
-		fflush(stdout);
-	}
+	// get the secret from the specified file (~/.google-authenticator by default)
+	if( fd )
+		fscanf( fd, "%s", key );
 	else
 	{
-		if( count < 30 )
-			for( int i = count+1; i <= 30; i++ )
-				printf( "+" );
-		printf( ": %s :\n", newout );
-		count = 0;
+		fprintf( stderr, "Can't open file `%s`\n", argv[1] );
+		free( key );
+		return 2;
 	}
 
-	strcpy( previouscode, newout );	
-	
-	count++;
-	usleep( 900000 );
-}
+	printf( HEADER );
 
-int main( int argc, const char *argv[] )
-{
-	if( argc < 2 )
+	while( 1 )
 	{
-		fprintf( stderr, "You've made a terrible mistake. And should thus feel bad.\n" );
-		return 42;
-	}
-
-	FILE* file;
-	if( (file = fopen( argv[1], "r" )) == NULL ) // They gave us something, but it sure as hell ain't a file.
-	{
-		fprintf( stderr, "Error: can't open file `%s'\n", argv[1] );
-		return 42+1; // because it's one worse than 42!
-	}
-
-	secret = malloc( sizeof(char)*2048 );
-	if( fscanf( file, "%s", secret ) <= 0 ) fprintf( stderr, "A valid secret could not be read from the file\n" );
-	secretlen = strlen( secret );
-
-	printf( ":----------------------------:--------:\n" );
-	printf( ":       Code Wait Time       :  Code  :\n" );
-	printf( ":----------------------------:--------:\n" );
-	
-	time_t thefuture = time(NULL)+1;
-
-	while(1)
-	{
-		if( time(NULL) >= thefuture ) 
+		if( time(NULL) >= nsec )
 		{
-			run();
-			thefuture = time(NULL)+1;
-		}	
-	}
+			if( getCurrentInterval() < nextInterval ) 
+			{
+				printf( "." );
+				count++;
+				fflush( stdout );
+			}
+			else
+			// we've moved on to the next interval, and have to update the pin
+			{
+				nextInterval = getCurrentInterval()+1;
+				for( int i = count+1; i < 30; i++ )
+					printf( "+" );
+				count = 0;
 
+				if( pinstr ) free( pinstr );
+				pin = generateCode( key, getCurrentInterval() );
+				pinstr = padOutput( pin );
+				printf( ": %s :\n", pinstr );
+			}
+			nsec = time(NULL)+1;
+		}
+		usleep( 900000 );
+	}
 	return 0;
 }
