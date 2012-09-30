@@ -9,6 +9,9 @@ INCLUDE=-Iinclude
 
 all: $(EXECUTABLE)
 
+googauth_debug: main.c google-authenticator.c hmac.c sha1.c base32.c
+	$(GCC) -g $(CFLAGS) $(INCLUDE) $^ $(LIBS) -o $(BINPATH)/$@
+
 $(EXECUTABLE): main.c google-authenticator.c hmac.c sha1.c base32.c
 	$(GCC) $(CFLAGS) $(INCLUDE) $^ $(LIBS) -o $(BINPATH)/$@
 
