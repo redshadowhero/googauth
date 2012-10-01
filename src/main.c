@@ -18,12 +18,49 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <getopt.h>
 
+#define   VERSIONMAJOR     1
+#define   VERSIONMINOR     0
 #define   PINLENGTH        6    // The number of digits a pin is supposed to be
 #define   INTERVALLENGTH   30   // The number of seconds in any one given interval
 #define   HEADER ":----------------------------:--------:\n" \
                  ":       Code Wait Time       :  Code  :\n" \
                  ":----------------------------:--------:\n"
+
+// getopt args
+#define OPTS "k:f:nl"
+#define USAGE \
+	"Usage: %s [OPTIONS...] [keyfile | key]\n" \
+	"\t-k, --key=KEY\t\tThe key to use\n" \
+	"\t-f, --file=FILE\t\tThe location of the keyfile\n" \
+	"\t-n, --no-interface\tTurn the interface off, printing only the latest pin on a new interval\n" \
+	"\t-l, --no-loop\t\tDon't loop and print the previous key, current key, and next key before exiting\n" \
+	"\tOptionally, you may specifiy the keyfile or the key with no flags.\n" \
+	"Version %d.%d\n"
+
+static int   nointerface = 0;
+static int   noloop      = 0;
+static char* exename     = NULL;
+static char* argstr      = NULL;
+
+struct option long_options[] =
+{
+	{ "key",            required_argument,   0,        'k' },
+	{ "file",           required_argument,   0,        'f' },
+	{ "no-interface",   no_argument,         0,        'n' },
+	{ "no-loop",        no_argument,         0,        'l' },
+	{ 0,                0,                   0,         0  }
+};
+
+
+void printUsage()
+{
+	printf( USAGE, exename, VERSIONMAJOR, VERSIONMINOR );
+}
+
+
+// end getopts variables
 
 #if (defined ( _WIN32 ) || defined ( _WIN64 )) && !defined (LINUX_HOST)
 
@@ -68,28 +105,16 @@ unsigned long getCurrentInterval()
 	return (unsigned long)(time(NULL)/INTERVALLENGTH);
 }
 
-int main( int argc, const char* argv[] )
+void pinLoop( char* key )
 {
-	// TODO: cli options
-	FILE* fd = fopen( argv[1], "r" );
-	char* key = malloc( sizeof(char)*18 );
+	// TODO: sigint support so we can clean up the input pin
 	time_t nsec = time(NULL)+1;     // next second
 	unsigned long nextInterval = getCurrentInterval(); // next interval to update at
 	int count = 0; // count for the interface
 	int pin = 0;
 	char* pinstr = NULL; // current pin to print out
-
-	// get the secret from the specified file (~/.google-authenticator by default)
-	if( fd )
-		fscanf( fd, "%s", key );
-	else
-	{
-		fprintf( stderr, "Can't open file `%s`\n", argv[1] );
-		free( key );
-		return 2;
-	}
-
-	printf( HEADER );
+	
+	if( !nointerface ) printf( HEADER );
 
 	while( 1 )
 	{
@@ -97,26 +122,147 @@ int main( int argc, const char* argv[] )
 		{
 			if( getCurrentInterval() < nextInterval ) 
 			{
-				printf( "." );
-				count++;
-				fflush( stdout );
+				if( !nointerface )
+				{
+					printf( "." );
+					count++;
+					fflush( stdout );
+				}
+
 			}
 			else
 			// we've moved on to the next interval, and have to update the pin
 			{
 				nextInterval = getCurrentInterval()+1;
-				for( int i = count+1; i < 30; i++ )
-					printf( "+" );
+				if( !nointerface )
+				{
+					for( int i = count+1; i < 30; i++ )
+						printf( "+" );
+				}
 				count = 0;
 
 				if( pinstr ) free( pinstr );
 				pin = generateCode( key, getCurrentInterval() );
 				pinstr = padOutput( pin );
-				printf( ": %s :\n", pinstr );
+				if( !nointerface ) printf( ": %s :\n", pinstr );
+				else printf( "%s\n", pinstr );
 			}
 			nsec = time(NULL)+1;
 		}
 		usleep( 900000 );
 	}
+}
+
+void parseOpts( int argc, char** argv )
+{
+	int c;
+	int option_index = 0;
+	FILE* fd;
+	char* key = malloc( sizeof(char)*20 );
+	char* pin = NULL;
+	exename = argv[0];
+
+	while( 1 )
+	{
+		c = getopt_long( argc, argv, OPTS, long_options, &option_index );
+		if( c == -1 ) break;
+
+		switch( c )
+		{
+			case 'k':
+				if( argstr )
+				{
+					printUsage();
+					exit( 1 );
+				}
+				argstr = optarg;
+			break;
+			case 'f':
+				if( argstr )
+				{
+					printUsage();
+					exit( 1 );
+				}
+				argstr = optarg;
+			break;
+			case 'n':
+				nointerface = 1;
+			break;
+			case 'l':
+				noloop = 1;
+			break;
+		}
+	}
+	
+	while( optind < argc ) // just cycle through and get the last argument
+	{
+		argstr = argv[optind];
+		optind++;
+	}
+
+
+	if( argstr == NULL )
+	{
+		free( key );
+		exit( 4 );
+	}
+
+	// check if argstr is a file
+	if( (fd = fopen( argstr, "r" )) )
+	{
+		fscanf( fd, "%s", key );
+		if( !noloop )
+		{
+			pinLoop( key );
+			free( key );
+		}
+		else
+		{
+			unsigned long interval = getCurrentInterval();
+
+			pin = padOutput( generateCode( key, interval-1 ) ); printf( "%s, ", pin );
+			free( pin );
+			pin = padOutput( generateCode( key, interval ) ); printf( "%s, ", pin );
+			free( pin );
+			pin = padOutput( generateCode( key, interval+1 ) ); printf( "%s\n", pin );
+			free( pin );
+			free( key );
+			return;
+		}
+	}
+	else // try as the key
+	{
+		key = argstr;
+		if( !noloop )
+		{
+			pinLoop( key );
+			free( key );
+		}
+		else
+		{
+			unsigned long interval = getCurrentInterval();
+			
+			pin = padOutput( generateCode( key, interval-1 ) ); printf( "%s, ", pin );
+			free( pin );
+			pin = padOutput( generateCode( key, interval ) ); printf( "%s, ", pin );
+			free( pin );
+			pin = padOutput( generateCode( key, interval+1 ) ); printf( "%s, ", pin );
+			free( pin );
+			free( key );
+			return;
+		}
+	}
+}
+
+int main( int argc, char* argv[] )
+{
+	exename = argv[0];
+	if( argc < 2 )
+	{
+		printUsage();
+		return 4;
+	}
+	parseOpts( argc, argv );
+
 	return 0;
 }
