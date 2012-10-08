@@ -22,6 +22,7 @@
 
 #define   VERSIONMAJOR     1
 #define   VERSIONMINOR     0
+#define   BUGFIX           1
 #define   PINLENGTH        6    // The number of digits a pin is supposed to be
 #define   INTERVALLENGTH   30   // The number of seconds in any one given interval
 #define   HEADER ":----------------------------:--------:\n" \
@@ -37,7 +38,7 @@
 	"\t-n, --no-interface\tTurn the interface off, printing only the latest pin on a new interval\n" \
 	"\t-l, --no-loop\t\tDon't loop and print the previous key, current key, and next key before exiting\n" \
 	"\tOptionally, you may specifiy the keyfile or the key with no flags.\n" \
-	"Version %d.%d\n"
+	"Version %d.%d.%d\n"
 
 static int   nointerface = 0;
 static int   noloop      = 0;
@@ -56,7 +57,7 @@ struct option long_options[] =
 
 void printUsage()
 {
-	printf( USAGE, exename, VERSIONMAJOR, VERSIONMINOR );
+	printf( USAGE, exename, VERSIONMAJOR, VERSIONMINOR, BUGFIX );
 }
 
 
@@ -209,49 +210,23 @@ void parseOpts( int argc, char** argv )
 
 	// check if argstr is a file
 	if( (fd = fopen( argstr, "r" )) )
-	{
 		fscanf( fd, "%s", key );
-		if( !noloop )
-		{
-			pinLoop( key );
-			free( key );
-		}
-		else
-		{
-			unsigned long interval = getCurrentInterval();
-
-			pin = padOutput( generateCode( key, interval-1 ) ); printf( "%s, ", pin );
-			free( pin );
-			pin = padOutput( generateCode( key, interval ) ); printf( "%s, ", pin );
-			free( pin );
-			pin = padOutput( generateCode( key, interval+1 ) ); printf( "%s\n", pin );
-			free( pin );
-			free( key );
-			return;
-		}
-	}
 	else // try as the key
-	{
 		key = argstr;
-		if( !noloop )
-		{
-			pinLoop( key );
-			free( key );
-		}
-		else
-		{
-			unsigned long interval = getCurrentInterval();
-			
-			pin = padOutput( generateCode( key, interval-1 ) ); printf( "%s, ", pin );
-			free( pin );
-			pin = padOutput( generateCode( key, interval ) ); printf( "%s, ", pin );
-			free( pin );
-			pin = padOutput( generateCode( key, interval+1 ) ); printf( "%s, ", pin );
-			free( pin );
-			free( key );
-			return;
-		}
+
+	if( !noloop ) pinLoop( key );
+	else
+	{
+		unsigned long interval = getCurrentInterval();
+
+		pin = padOutput( generateCode( key, interval-1 ) ); printf( "%s, ", pin );
+		free( pin );
+		pin = padOutput( generateCode( key, interval ) ); printf( "%s, ", pin );
+		free( pin );
+		pin = padOutput( generateCode( key, interval+1 ) ); printf( "%s\n", pin );
+		free( pin );
 	}
+	if( key != argstr ) free( key ); // argstr comes from argv; best not to free it
 }
 
 int main( int argc, char* argv[] )
