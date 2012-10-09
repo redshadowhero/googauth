@@ -19,10 +19,11 @@
 #include <time.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <signal.h>
 
 #define   VERSIONMAJOR     1
-#define   VERSIONMINOR     0
-#define   BUGFIX           1
+#define   VERSIONMINOR     1
+#define   BUGFIX           0
 #define   PINLENGTH        6    // The number of digits a pin is supposed to be
 #define   INTERVALLENGTH   30   // The number of seconds in any one given interval
 #define   HEADER ":----------------------------:--------:\n" \
@@ -40,10 +41,12 @@
 	"\tOptionally, you may specifiy the keyfile or the key with no flags.\n" \
 	"Version %d.%d.%d\n"
 
+// global
 static int   nointerface = 0;
 static int   noloop      = 0;
 static char* exename     = NULL;
 static char* argstr      = NULL;
+static int   sigintGiven = 0;
 
 struct option long_options[] =
 {
@@ -80,6 +83,15 @@ void usleep( int waitTime )
 }
 
 #endif
+
+void sigHandler( int sig )
+{
+	signal( sig, SIG_IGN );
+
+	sigintGiven = 1;
+
+	signal( SIGINT, sigHandler );
+}
 
 char* padOutput( int pin )
 {
@@ -150,8 +162,15 @@ void pinLoop( char* key )
 			}
 			nsec = time(NULL)+1;
 		}
+		
+		if( sigintGiven == 1 )
+		{
+			if( pinstr ) free( pinstr );
+			return;
+		}
 		usleep( 900000 );
 	}
+
 }
 
 void parseOpts( int argc, char** argv )
@@ -231,6 +250,7 @@ void parseOpts( int argc, char** argv )
 
 int main( int argc, char* argv[] )
 {
+	signal( SIGINT, sigHandler );
 	exename = argv[0];
 	if( argc < 2 )
 	{

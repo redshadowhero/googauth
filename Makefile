@@ -11,7 +11,7 @@ STDARGS=$(CFLAGS) $(INCLUDE) $^ $(LIBS) -o $(BINPATH)/$@
 all: $(EXECUTABLE)
 
 $(EXECUTABLE)_debug: main.c google-authenticator.c hmac.c sha1.c base32.c
-	$(GCC) -g $(STDARGS)
+	$(GCC) -g $(STDARGS) -pg
 
 $(EXECUTABLE): main.c google-authenticator.c hmac.c sha1.c base32.c
 	$(GCC) $(STDARGS)
