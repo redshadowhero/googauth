@@ -23,7 +23,7 @@
 
 #define   VERSIONMAJOR     1
 #define   VERSIONMINOR     1
-#define   BUGFIX           0
+#define   BUGFIX           1
 #define   PINLENGTH        6    // The number of digits a pin is supposed to be
 #define   INTERVALLENGTH   30   // The number of seconds in any one given interval
 #define   HEADER ":----------------------------:--------:\n" \
@@ -166,6 +166,8 @@ void pinLoop( char* key )
 		if( sigintGiven == 1 )
 		{
 			if( pinstr ) free( pinstr );
+			printf( "\n" ); // just so we start on a fresh line.
+			fflush( stdout );
 			return;
 		}
 		usleep( 900000 );
