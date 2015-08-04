@@ -180,7 +180,7 @@ void parseOpts( int argc, char** argv )
 	int c;
 	int option_index = 0;
 	FILE* fd;
-	char* key = malloc( sizeof(char)*20 );
+	char* key = malloc( sizeof(char)*128 );
 	char* pin = NULL;
 	exename = argv[0];
 
