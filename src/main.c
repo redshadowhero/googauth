@@ -22,10 +22,11 @@
 #include <signal.h>
 
 #define   VERSIONMAJOR     1
-#define   VERSIONMINOR     1
+#define   VERSIONMINOR     2
 #define   BUGFIX           1
 #define   PINLENGTH        6    // The number of digits a pin is supposed to be
 #define   INTERVALLENGTH   30   // The number of seconds in any one given interval
+#define   MAX_KEYSIZE      128  // maximum size a key can be
 #define   HEADER ":----------------------------:--------:\n" \
                  ":       Code Wait Time       :  Code  :\n" \
                  ":----------------------------:--------:\n"
@@ -180,7 +181,7 @@ void parseOpts( int argc, char** argv )
 	int c;
 	int option_index = 0;
 	FILE* fd;
-	char* key = malloc( sizeof(char)*20 );
+	char* key = malloc( sizeof(char)*MAX_KEYSIZE );
 	char* pin = NULL;
 	exename = argv[0];
 
